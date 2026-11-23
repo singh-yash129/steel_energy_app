@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Insights · Steel Energy Predictor{% endblock %}
+{% block content %}
+<section class="hero compact">
+  <p class="eyebrow">Plant dashboard · 2018</p>
+  <h1>What the data says about <span class="grad">this plant</span></h1>
+  <p class="lead">35,040 meter readings, one every 15 minutes for a full year — summarised into the patterns that drive the predictions.</p>
+</section>
+
+<section class="dash">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="dgrid">
+    <article class="card dcard span2"><header><h3>Average usage by hour</h3><p>Weekdays vs weekends — kWh per 15-minute reading</p></header><canvas id="c-hourly" height="150"></canvas></article>
+    <article class="card dcard"><header><h3>Load types</h3><p>Share of time vs share of energy</p></header><canvas id="c-load" height="230"></canvas></article>
+
+    <article class="card dcard span2"><header><h3>When is the plant busiest?</h3><p>Average kWh per reading by weekday and hour</p></header><div id="heat" class="heat"></div></article>
+    <article class="card dcard"><header><h3>Day of week</h3><p>Average kWh per day</p></header><canvas id="c-dow" height="230"></canvas></article>
+
+    <article class="card dcard span2"><header><h3>Month by month</h3><p>Average daily kWh (bars) and total CO₂ in tonnes (line)</p></header><canvas id="c-month" height="150"></canvas></article>
+    <article class="card dcard"><header><h3>Load-duration curve</h3><p>How often demand exceeds each level</p></header><canvas id="c-ldc" height="230"></canvas></article>
+
+    <article class="card dcard span2"><header><h3>Power factor through the day</h3><p>Lagging power factor dips overnight and when load is light</p></header><canvas id="c-pf" height="150"></canvas></article>
+    <article class="card dcard"><header><h3>Model accuracy</h3><p>Average error on unseen Oct–Dec (lower is better)</p></header><canvas id="c-models" height="230"></canvas></article>
+  </div>
+
+  <div class="card takeaways"><h3>Key takeaways</h3><ul id="takeaways"></ul></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/insights.js') }}"></script>{% endblock %}

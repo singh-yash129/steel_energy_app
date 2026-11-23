@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}How it works · Steel Energy Predictor{% endblock %}
+{% block content %}
+{% set nd = meta.forecast['Next day'] %}
+{% set q15 = meta.forecast['Next 15 minutes'] %}
+{% set cond = meta.conditions %}
+<section class="hero compact">
+  <p class="eyebrow">Transparency</p>
+  <h1>How the predictions <span class="grad">work</span></h1>
+  <p class="lead">Three models, chosen and scored the same honest way: pick on June–September, then test on October–December data the models never saw.</p>
+</section>
+
+<section class="about">
+  <div class="steps">
+    <div class="card step"><span>1</span><h3>You enter readings</h3><p>Either recent usage (for a forecast) or the meter's reactive energy and power factor (for an estimate).</p></div>
+    <div class="card step"><span>2</span><h3>Models predict</h3><p>Gradient Boosting and Random Forest models learned the plant's daily, weekly and seasonal rhythm from 2018.</p></div>
+    <div class="card step"><span>3</span><h3>You get context</h3><p>Each answer comes with an error range, a comparison with typical usage, CO₂ and optional cost.</p></div>
+  </div>
+
+  <div class="card">
+    <h3>Model scorecard (October–December test)</h3>
+    <div class="table-wrap">
+    <table class="tbl">
+      <thead><tr><th>Model</th><th>Used for</th><th>Chosen method</th><th>Average error</th><th>Best simple guess</th><th>Improvement</th></tr></thead>
+      <tbody>
+        <tr><td>Next-day forecast</td><td>Same time tomorrow</td><td>{{ nd.chosen_model }}</td><td>{{ '%.2f'|format(nd.final_scores[nd.chosen_model].MAE) }} kWh</td><td>{{ nd.best_baseline }} · {{ '%.2f'|format(nd.final_scores[nd.best_baseline].MAE) }}</td><td class="good">{{ '%.1f'|format(nd.improvement_vs_baseline_pct) }}% better</td></tr>
+        <tr><td>15-minute forecast</td><td>Next reading</td><td>{{ q15.chosen_model }}</td><td>{{ '%.2f'|format(q15.final_scores[q15.chosen_model].MAE) }} kWh</td><td>{{ q15.best_baseline }} · {{ '%.2f'|format(q15.final_scores[q15.best_baseline].MAE) }}</td><td class="good">{{ '%.1f'|format(q15.improvement_vs_baseline_pct) }}% better</td></tr>
+        <tr><td>Meter readings → kWh</td><td>Estimate energy from reactive power &amp; power factor</td><td>{{ cond.regressor }}</td><td>{{ '%.2f'|format(cond.regressor_scores.MAE) }} kWh</td><td>—</td><td class="good">R² {{ '%.4f'|format(cond.regressor_scores.R2) }}</td></tr>
+        <tr><td>Load-type classifier</td><td>Light / Medium / Maximum</td><td>{{ cond.classifier }}</td><td>{{ '%.1f'|format(100*cond.classifier_scores.accuracy) }}% accuracy</td><td>—</td><td>Macro-F1 {{ '%.2f'|format(cond.classifier_scores.macro_f1) }}</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card"><h3>Reading the results</h3>
+      <ul class="plain">
+        <li><b>Range</b> — about 80% of past forecast errors fell inside this band, so treat it as a realistic "could be" window, not a guarantee.</li>
+        <li><b>Typical</b> — compared with the plant's own usage at the same time of day on weekdays or weekends.</li>
+        <li><b>CO₂</b> — uses 0.455 kg per kWh, the assumption in the analysis notebook.</li>
+        <li><b>Cost</b> — only if you enter a price; real bills may also include demand and power-factor charges.</li>
+      </ul></div>
+    <div class="card"><h3>Good to know</h3>
+      <ul class="plain">
+        <li>The models learned from <b>one plant in one year (2018)</b>. They are most reliable for similar operating patterns.</li>
+        <li>"Meter readings → kWh" is an estimate, not a forecast: power factor and reactive energy mathematically determine real energy, so it is very accurate. The page also shows the exact physics value as a cross-check when it applies.</li>
+        <li>The load-type label is the hardest part ({{ '%.0f'|format(100*cond.classifier_scores.accuracy) }}% accurate): Medium and Maximum often overlap.</li>
+        <li>Forecasts need your recent history. Use <b>Fill typical values</b> only for a rough what-if.</li>
+      </ul></div>
+  </div>
+
+  <div class="card"><h3>API</h3>
+    <p class="hint">Everything on this site is also available as JSON.</p>
+    <pre class="code">POST /api/predict/forecast
+{ "horizon": "Next day", "target": "2026-11-23T14:00",
+  "lag_24h": 38.5, "lag_48h": 41.2, "lag_7d": 36.0, "prev_day_mean": 29.4 }
+
+POST /api/predict/conditions
+{ "target": "2026-11-23T14:00", "lag_react": 18.4, "lead_react": 0,
+  "lag_pf": 82.5, "lead_pf": 100 }</pre>
+  </div>
+</section>
+{% endblock %}

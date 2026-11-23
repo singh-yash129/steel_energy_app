@@ -1,0 +1,3 @@
+Forecast,Chosen model,Model MAE,Chosen simple guess,Simple guess MAE,MAE improvement (%),Model RMSE,Model R²
+Next day,Gradient Boosting,10.688577112483319,Same time last week,12.942401494565217,17.414267228754465,18.911851058357065,0.6496945246085242
+Next 15 minutes,Random Forest,4.973439611838563,Previous reading,5.799555027173913,14.244462057253914,10.187144052528462,0.8983555330782825

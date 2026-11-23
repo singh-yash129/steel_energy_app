@@ -1,0 +1,3 @@
+Scenario,Original electricity use (kWh),Electricity saved (kWh),"CO2 saved, assumed factor (tonnes)","CO2 saved, dataset factor (tonnes)"
+All light-load readings,155892.81,15589.281,7.093122855000001,6.559886147550566
+Possible idle readings,51598.48000000001,5159.848000000002,2.347730840000001,2.1712364681005174

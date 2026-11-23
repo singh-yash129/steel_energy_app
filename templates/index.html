@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Predict · Steel Energy Predictor{% endblock %}
+
+{% block content %}
+{% set nd = meta.forecast['Next day'] %}
+{% set q15 = meta.forecast['Next 15 minutes'] %}
+<section class="hero">
+  <p class="eyebrow">AI energy forecasting for steel plants</p>
+  <h1>Fill in your readings.<br><span class="grad">Get the predicted electricity use.</span></h1>
+  <p class="lead">Forecast tomorrow's demand, estimate the next 15 minutes, or turn raw meter readings into kWh, CO₂ and load type — in seconds.</p>
+  <div class="chips">
+    <div class="chip"><b>{{ '%.1f'|format(nd.improvement_vs_baseline_pct) }}%</b><span>lower error than a simple guess (next day)</span></div>
+    <div class="chip"><b>{{ '%.1f'|format(q15.improvement_vs_baseline_pct) }}%</b><span>lower error (next 15 min)</span></div>
+    <div class="chip"><b>R² {{ '%.4f'|format(meta.conditions.regressor_scores.R2) }}</b><span>meter readings → kWh</span></div>
+  </div>
+</section>
+
+<section class="workspace">
+  <div class="tabs" role="tablist" aria-label="Prediction type">
+    <button class="tab active" role="tab" aria-selected="true" data-tab="forecast" id="tab-forecast">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Forecast
+    </button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="conditions" id="tab-conditions">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>Meter readings → kWh
+    </button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="batch" id="tab-batch">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>Batch CSV
+    </button>
+  </div>
+
+  <div class="grid">
+    <!-- ================= INPUT COLUMN ================= -->
+    <div class="card form-card">
+
+      <!-- Forecast form -->
+      <form id="form-forecast" class="panel" novalidate>
+        <h2>Forecast the next reading</h2>
+        <p class="hint">Tell us when you want a prediction for and what the plant used recently.</p>
+
+        <div class="seg" role="radiogroup" aria-label="Forecast type">
+          <label><input type="radio" name="horizon" value="Next day" checked><span>Same time tomorrow</span></label>
+          <label><input type="radio" name="horizon" value="Next 15 minutes"><span>Next 15 minutes</span></label>
+        </div>
+
+        <div class="field">
+          <label for="f-target">Predict for (reading time)</label>
+          <input id="f-target" name="target" type="datetime-local" step="900" required>
+          <small>The meter reports every 15 minutes; we round to the nearest reading.</small>
+        </div>
+
+        <div class="two">
+          <div class="field"><label for="f-lag24">Same time yesterday <em>kWh</em></label>
+            <input id="f-lag24" name="lag_24h" type="number" step="0.01" min="0" max="250" inputmode="decimal" required placeholder="e.g. 38.5"></div>
+          <div class="field"><label for="f-lag48">Two days ago <em>kWh</em></label>
+            <input id="f-lag48" name="lag_48h" type="number" step="0.01" min="0" max="250" inputmode="decimal" required placeholder="e.g. 41.2"></div>
+          <div class="field"><label for="f-lag7">Same time last week <em>kWh</em></label>
+            <input id="f-lag7" name="lag_7d" type="number" step="0.01" min="0" max="250" inputmode="decimal" required placeholder="e.g. 36.0"></div>
+          <div class="field"><label for="f-prev">Yesterday's average <em>kWh / reading</em></label>
+            <input id="f-prev" name="prev_day_mean" type="number" step="0.01" min="0" max="250" inputmode="decimal" required placeholder="e.g. 29.4"></div>
+        </div>
+
+        <div class="field" id="lag15-wrap" hidden>
+          <label for="f-lag15">Previous 15-minute reading <em>kWh</em></label>
+          <input id="f-lag15" name="lag_15" type="number" step="0.01" min="0" max="250" inputmode="decimal" placeholder="e.g. 44.0">
+        </div>
+
+        <div class="field">
+          <label for="f-tariff">Electricity price <em>per kWh · optional</em></label>
+          <input id="f-tariff" name="tariff" type="number" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 7.5">
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn ghost" id="btn-typical">Fill typical values</button>
+          <button type="button" class="btn ghost" id="btn-example-f">Try a real example</button>
+          <button type="submit" class="btn primary">Predict <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </form>
+
+      <!-- Conditions form -->
+      <form id="form-conditions" class="panel" novalidate hidden>
+        <h2>Estimate from meter readings</h2>
+        <p class="hint">Enter what the meter shows for one 15-minute interval. We estimate energy, CO₂ and the load type.</p>
+
+        <div class="field">
+          <label for="c-target">Reading time</label>
+          <input id="c-target" name="target" type="datetime-local" step="900" required>
+        </div>
+        <div class="two">
+          <div class="field"><label for="c-lagq">Lagging reactive energy <em>kVarh</em></label>
+            <input id="c-lagq" name="lag_react" type="number" step="0.01" min="0" max="120" inputmode="decimal" required placeholder="e.g. 18.4"></div>
+          <div class="field"><label for="c-leadq">Leading reactive energy <em>kVarh</em></label>
+            <input id="c-leadq" name="lead_react" type="number" step="0.01" min="0" max="60" inputmode="decimal" required placeholder="e.g. 0"></div>
+          <div class="field"><label for="c-lagpf">Lagging power factor <em>%</em></label>
+            <input id="c-lagpf" name="lag_pf" type="number" step="0.01" min="0" max="100" inputmode="decimal" required placeholder="e.g. 82.5"></div>
+          <div class="field"><label for="c-leadpf">Leading power factor <em>%</em></label>
+            <input id="c-leadpf" name="lead_pf" type="number" step="0.01" min="0" max="100" inputmode="decimal" required placeholder="e.g. 100"></div>
+        </div>
+        <div class="field">
+          <label for="c-tariff">Electricity price <em>per kWh · optional</em></label>
+          <input id="c-tariff" name="tariff" type="number" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 7.5">
+        </div>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="btn-example-c">Try a real example</button>
+          <button type="submit" class="btn primary">Estimate <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </form>
+
+      <!-- Batch -->
+      <form id="form-batch" class="panel" novalidate hidden>
+        <h2>Predict many readings at once</h2>
+        <p class="hint">Upload a CSV with <code>timestamp, lag_react, lead_react, lag_pf, lead_pf</code> (up to 5,000 rows). The original dataset's column names also work.</p>
+        <label class="drop" id="drop" for="b-file">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg>
+          <strong id="drop-title">Drop a CSV here or click to browse</strong>
+          <span id="drop-sub">Max 2 MB</span>
+          <input id="b-file" name="file" type="file" accept=".csv,text/csv" hidden>
+        </label>
+        <div class="actions">
+          <a class="btn ghost" href="{{ url_for('template_csv') }}">Download template</a>
+          <button type="submit" class="btn primary">Predict all <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        </div>
+      </form>
+
+      <div class="alert" id="alert" role="alert" hidden></div>
+    </div>
+
+    <!-- ================= RESULT COLUMN ================= -->
+    <div class="card result-card" aria-live="polite">
+      <div class="empty" id="empty">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <defs><linearGradient id="eg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9a3c"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="url(#eg)" stroke-width="3" stroke-dasharray="6 8"/>
+          <path d="M66 22 38 64h20l-4 34 28-44H62z" fill="url(#eg)"/>
+        </svg>
+        <h3>Your prediction appears here</h3>
+        <p>Fill the form on the left, or hit <b>Try a real example</b> to see how it works.</p>
+      </div>
+
+      <div id="result" hidden>
+        <div class="res-head">
+          <div>
+            <p class="kicker" id="r-kicker">Predicted usage</p>
+            <p class="when" id="r-when"></p>
+          </div>
+          <span class="pill" id="r-status"></span>
+        </div>
+
+        <div class="big"><span id="r-kwh">0</span><small>kWh <i>in this 15-minute reading</i></small></div>
+        <p class="range" id="r-range"></p>
+
+        <div class="meter" id="meter" aria-hidden="true">
+          <div class="track"><div class="zone wide" id="m-wide"></div><div class="zone core" id="m-core"></div>
+            <div class="whisk" id="m-whisk"></div><div class="mark" id="m-mark"></div></div>
+          <div class="legend"><span><i class="k-core"></i>Typical (middle 50%)</span><span><i class="k-wide"></i>Usual range (10–90%)</span><span><i class="k-mark"></i>Prediction</span></div>
+        </div>
+
+        <div class="tiles" id="tiles"></div>
+
+        <div class="chips-row" id="r-compare"></div>
+        <ul class="tips" id="r-tips"></ul>
+
+        <div class="extra" id="r-extra" hidden></div>
+
+        <div class="chart-wrap"><canvas id="r-chart" height="190" aria-label="Typical usage across the day with your prediction marked"></canvas></div>
+        <p class="model-note" id="r-model"></p>
+      </div>
+
+      <div id="batch-result" hidden>
+        <div class="res-head"><div><p class="kicker">Batch results</p><p class="when" id="b-when"></p></div>
+          <button class="btn ghost small" id="b-download" type="button">Download CSV</button></div>
+        <div class="tiles" id="b-tiles"></div>
+        <div class="chart-wrap"><canvas id="b-chart" height="190" aria-label="Predicted usage for each uploaded row"></canvas></div>
+        <div class="table-wrap"><table class="tbl" id="b-table"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/predict.js') }}"></script>{% endblock %}
